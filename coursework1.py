@@ -673,50 +673,50 @@ def q2d():
 
 def q2e():
     # initialise parameters and construct gridworld
-    num_runs, num_episodes, p, gamma, epsilon, alpha, threshold = 100, 10000, 0.75, 0.3, 0.1, 0.005, 0.001
+    num_runs, num_episodes, p, gamma, epsilon, alpha, threshold = 100, 1000, 0.75, 0.3, 0, 0.005, 0.001
     grid = GridWorld(p)
 
     _, dp_values = find_optimal_policy_and_values(grid, p, gamma, threshold)
 
-    # plot optimal state-value function RMSE against number of episodes for both MC and TD agents
-    _, _, _, mc_errors = grid.monte_carlo_iterative_optimisation(num_episodes, alpha, epsilon, gamma, discounting="forward", analytical_values=dp_values)
-    _, _, _, td_errors = grid.sarsa(num_episodes, alpha, epsilon, gamma, discounting="forward", analytical_values=dp_values)
+    # # plot optimal state-value function RMSE against number of episodes for both MC and TD agents
+    # _, _, _, mc_errors = grid.monte_carlo_iterative_optimisation(num_episodes, alpha, epsilon, gamma, discounting="forward", analytical_values=dp_values)
+    # _, _, _, td_errors = grid.sarsa(num_episodes, alpha, epsilon, gamma, discounting="forward", analytical_values=dp_values)
 
-    plt.figure()
-    plt.plot(mc_errors, color="mediumseagreen")
-    plt.plot(td_errors, color="darkblue")
-    plt.xlabel("Number of episodes experienced")
-    plt.ylabel(r"RMSE of $V^*$ function")
-    plt.title(rf"Comparison of value RMSE curves for MC and TD ($\alpha={alpha}$)")
-    plt.legend(("MC", "TD"))
-    plt.show()
+    # plt.figure()
+    # plt.plot(mc_errors, color="mediumseagreen")
+    # plt.plot(td_errors, color="darkblue")
+    # plt.xlabel("Number of episodes experienced")
+    # plt.ylabel(r"RMSE of $V^*$ function")
+    # plt.title(rf"Comparison of value RMSE curves for MC and TD ($\alpha={alpha}$)")
+    # plt.legend(("MC", "TD"))
+    # plt.show()
 
-    # do the same but this time perform a bunch of runs and display the standard deviation as well
-    mc_error_matrix = np.zeros((num_runs, num_episodes))
-    td_error_matrix = np.zeros((num_runs, num_episodes))
+    # # do the same but this time perform a bunch of runs and display the standard deviation as well
+    # mc_error_matrix = np.zeros((num_runs, num_episodes))
+    # td_error_matrix = np.zeros((num_runs, num_episodes))
 
-    for run_idx in tqdm(range(num_runs)):
-        _, _, _, mc_error_matrix[run_idx] = grid.monte_carlo_iterative_optimisation(num_episodes, alpha, epsilon, gamma, discounting="forward", show_progress=False, analytical_values=dp_values)
-        _, _, _, td_error_matrix[run_idx] = grid.sarsa(num_episodes, alpha, epsilon, gamma, discounting="forward", show_progress=False, analytical_values=dp_values)
+    # for run_idx in tqdm(range(num_runs)):
+    #     _, _, _, mc_error_matrix[run_idx] = grid.monte_carlo_iterative_optimisation(num_episodes, alpha, epsilon, gamma, discounting="forward", show_progress=False, analytical_values=dp_values)
+    #     _, _, _, td_error_matrix[run_idx] = grid.sarsa(num_episodes, alpha, epsilon, gamma, discounting="forward", show_progress=False, analytical_values=dp_values)
     
-    mc_error_average = np.average(mc_error_matrix, axis=0)
-    td_error_average = np.average(td_error_matrix, axis=0)
-    mc_error_std = np.std(mc_error_matrix, axis=0)
-    td_error_std = np.std(td_error_matrix, axis=0)
+    # mc_error_average = np.average(mc_error_matrix, axis=0)
+    # td_error_average = np.average(td_error_matrix, axis=0)
+    # mc_error_std = np.std(mc_error_matrix, axis=0)
+    # td_error_std = np.std(td_error_matrix, axis=0)
 
-    plt.figure()
+    # plt.figure()
 
-    plt.plot(mc_error_average, color="mediumseagreen")
-    plt.fill_between(np.arange(len(mc_error_average)), mc_error_average - mc_error_std, mc_error_average + mc_error_std, color="mediumseagreen", alpha=0.2)
+    # plt.plot(mc_error_average, color="mediumseagreen")
+    # plt.fill_between(np.arange(len(mc_error_average)), mc_error_average - mc_error_std, mc_error_average + mc_error_std, color="mediumseagreen", alpha=0.2)
 
-    plt.plot(td_error_average, color="darkblue")
-    plt.fill_between(np.arange(len(td_error_average)), td_error_average - td_error_std, td_error_average + td_error_std, color="darkblue", alpha=0.2)
+    # plt.plot(td_error_average, color="darkblue")
+    # plt.fill_between(np.arange(len(td_error_average)), td_error_average - td_error_std, td_error_average + td_error_std, color="darkblue", alpha=0.2)
 
-    plt.xlabel("Number of episodes experienced")
-    plt.ylabel(r"RMSE of $V^*$ function")
-    plt.title(rf"Comparison of value RMSE curves for MC and TD ($\alpha={alpha}$)")
-    plt.legend(("MC", "TD"))
-    plt.show()
+    # plt.xlabel("Number of episodes experienced")
+    # plt.ylabel(r"RMSE of $V^*$ function")
+    # plt.title(rf"Comparison of value RMSE curves for MC and TD ($\alpha={alpha}$)")
+    # plt.legend(("MC", "TD"))
+    # plt.show()
 
     # plot optimal state-value function RMSE against total episode return 
     _, _, mc_returns, mc_errors = grid.monte_carlo_iterative_optimisation(num_episodes, alpha, epsilon, gamma, discounting="forward", analytical_values=dp_values)
@@ -724,13 +724,19 @@ def q2e():
     
     plt.figure()
 
-    plt.plot(mc_returns, mc_errors, color="darkseagreen")
-    plt.plot(td_returns, td_errors, color="darkblue")
-
+    plt.subplot(1, 2, 1)
+    plt.scatter(mc_returns, mc_errors, color="mediumseagreen")
     plt.xlabel("Total discounted episode return")
     plt.ylabel(r"RMSE of $V^*$ function")
-    plt.title(rf"$V^*$ RMSE against total discounted episode return ($\alpha={alpha}$)")
-    plt.legend(("MC", "TD"))
+    plt.title("Monte-Carlo")
+
+    plt.subplot(1, 2, 2)
+    plt.scatter(td_returns, td_errors, color="darkblue")
+    plt.xlabel("Total discounted episode return")
+    plt.ylabel(r"RMSE of $V^*$ function")
+    plt.title("Temporal Difference")
+
+    plt.suptitle(rf"$V^*$ RMSE against total discounted episode return ($\alpha={alpha}$)")
     plt.show()
 
 def main():
