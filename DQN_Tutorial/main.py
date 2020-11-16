@@ -2,10 +2,29 @@
 import numpy as np
 import torch
 import time
+from matplotlib import pyplot as plt
+from tqdm import tqdm
+import collections
 
 # Import the environment module
 from environment import Environment
 
+# Turn on interactive mode for PyPlot, to prevent the displayed graph from blocking the program flow
+plt.ion()
+
+class ReplayBuffer:
+    def __init__(self):
+        self.buffer = collections.deque(maxlen=5000)
+    
+    def record_transition(self, transition):
+        self.buffer.append(transition)
+
+    def sample_random_transitions(self, n):
+        idxs = np.random.randint(len(self.buffer), size=n)
+        return np.array([self.buffer[i] for i in idxs])
+
+    def length(self):
+        return len(self.buffer)
 
 # The Agent class allows the agent to interact with the environment.
 class Agent:
@@ -16,6 +35,10 @@ class Agent:
         self.environment = environment
         # Create the agent's current state
         self.state = None
+        # Initialise the agent's set of possible actions
+        self.actions = np.arange(4)
+        # Initialise constant step magnitude
+        self.step_size = 0.1
         # Create the agent's total reward for the current episode.
         self.total_reward = None
         # Reset the agent.
@@ -49,14 +72,23 @@ class Agent:
 
     # Function for the agent to choose its next action
     def _choose_next_action(self):
-        # Return discrete action 0
-        return 0
+        # Return random discrete action
+        return np.random.choice(self.actions)
 
     # Function to convert discrete action (as used by a DQN) to a continuous action (as used by the environment).
     def _discrete_action_to_continuous(self, discrete_action):
         if discrete_action == 0:
-            # Move 0.1 to the right, and 0 upwards
-            continuous_action = np.array([0.1, 0], dtype=np.float32)
+            # Move up
+            continuous_action = np.array([0, self.step_size], dtype=np.float32)
+        elif discrete_action == 1:
+            # Move right
+            continuous_action = np.array([self.step_size, 0], dtype=np.float32)
+        elif discrete_action == 2:
+            # Move down
+            continuous_action = np.array([0, -self.step_size], dtype=np.float32)
+        elif discrete_action == 3:
+            # Move left
+            continuous_action = np.array([-self.step_size, 0], dtype=np.float32)
         return continuous_action
 
     # Function for the agent to compute its reward. In this example, the reward is based on the agent's distance to the goal after the agent takes an action.
@@ -96,11 +128,11 @@ class DQN:
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.001)
 
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
-    def train_q_network(self, transition):
+    def train_q_network(self, transitions):
         # Set all the gradients stored in the optimiser to zero.
         self.optimiser.zero_grad()
         # Calculate the loss for this transition.
-        loss = self._calculate_loss(transition)
+        loss = self._calculate_loss(transitions)
         # Compute the gradients based on this loss, i.e. the gradients of the loss with respect to the Q-network parameters.
         loss.backward()
         # Take one gradient step to update the Q-network.
@@ -108,11 +140,25 @@ class DQN:
         # Return the loss as a scalar
         return loss.item()
 
-    # Function to calculate the loss for a particular transition.
-    def _calculate_loss(self, transition):
-        pass
-        # TODO
+    # Function to calculate the loss for a batch of transitions
+    def _calculate_loss(self, transitions):
+        first_states = np.zeros((len(transitions), 2), dtype=np.float32)
+        action_idxs = np.zeros(len(transitions), dtype=np.int64)
+        experienced_rewards = np.zeros(len(transitions), dtype=np.float32)
+        second_states = np.zeros((len(transitions), 2), dtype=np.float32)
 
+        for i,t in enumerate(transitions):
+            first_states[i], action_idxs[i], experienced_rewards[i], second_states[i] = t
+
+        first_state_output = self.q_network.forward(torch.tensor(first_states))
+        second_state_output = self.q_network.forward(torch.tensor(second_states))
+
+        first_state_values = first_state_output.gather(dim=1, index=torch.tensor(action_idxs).unsqueeze(-1)).squeeze(-1)
+        second_state_max_values = torch.max(second_state_output, dim=1)[0]
+
+        bellman_values = torch.tensor(experienced_rewards) + (0.9 * second_state_max_values)
+
+        return torch.nn.MSELoss()(first_state_values, bellman_values)
 
 # Main entry point
 if __name__ == "__main__":
@@ -125,14 +171,38 @@ if __name__ == "__main__":
     agent = Agent(environment)
     # Create a DQN (Deep Q-Network)
     dqn = DQN()
+    # Create an experience replay buffer to record transitions
+    buffer = ReplayBuffer()
+
+    losses = []
+    iterations = []
+
+    fig, ax = plt.subplots()
+    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN')
 
     # Loop over episodes
-    while True:
+    for ep_idx in tqdm(range(1000)):
         # Reset the environment for the start of the episode.
         agent.reset()
+        # Initialise average loss for this episode
+        episode_loss_average = 0
         # Loop over steps within this episode. The episode length here is 20.
         for step_num in range(20):
-            # Step the agent once, and get the transition tuple for this step
+            # Step the agent once, and record the transition tuple
             transition = agent.step()
-            # Sleep, so that you can observe the agent moving. Note: this line should be removed when you want to speed up training
-            time.sleep(0.2)
+
+            buffer.record_transition(transition)
+            # Train the DQN on a random sample from the replay buffer
+            if buffer.length() >= 100:
+                training_sample = buffer.sample_random_transitions(100)
+                loss = dqn.train_q_network(training_sample)
+                # update the episode loss average
+                episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
+
+        if buffer.length() >= 100:
+            iterations.append(ep_idx)
+            losses.append(episode_loss_average)
+            ax.plot(iterations, losses, color='blue')
+            plt.yscale('log')
+            plt.show()
+            fig.savefig("loss_vs_iterations.png")
