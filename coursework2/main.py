@@ -5,9 +5,11 @@ import time
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import collections
+import copy
 
-# Import the environment module
+# Import local helper modules
 from environment import Environment
+from q_value_visualiser import QValueVisualiser
 
 # Turn on interactive mode for PyPlot, to prevent the displayed graph from blocking the program flow
 plt.ion()
@@ -78,17 +80,17 @@ class Agent:
     # Function to convert discrete action (as used by a DQN) to a continuous action (as used by the environment).
     def _discrete_action_to_continuous(self, discrete_action):
         if discrete_action == 0:
-            # Move up
-            continuous_action = np.array([0, self.step_size], dtype=np.float32)
-        elif discrete_action == 1:
             # Move right
             continuous_action = np.array([self.step_size, 0], dtype=np.float32)
+        elif discrete_action == 1:
+            # Move up
+            continuous_action = np.array([0, self.step_size], dtype=np.float32)
         elif discrete_action == 2:
-            # Move down
-            continuous_action = np.array([0, -self.step_size], dtype=np.float32)
-        elif discrete_action == 3:
             # Move left
             continuous_action = np.array([-self.step_size, 0], dtype=np.float32)
+        elif discrete_action == 3:
+            # Move down
+            continuous_action = np.array([0, -self.step_size], dtype=np.float32)
         return continuous_action
 
     # Function for the agent to compute its reward. In this example, the reward is based on the agent's distance to the goal after the agent takes an action.
@@ -124,15 +126,26 @@ class DQN:
     def __init__(self):
         # Create a Q-network, which predicts the q-value for a particular state.
         self.q_network = Network(input_dimension=2, output_dimension=4)
+        # Create a target network, with same architecture as Q-network
+        self.target_network = Network(input_dimension=2, output_dimension=4)
+        self.copy_weights()
         # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.001)
 
+    def copy_weights(self):
+        self.target_network.load_state_dict(self.q_network.state_dict())
+
+    def decrease_learning_rate(self, factor):
+        for param_group in self.optimiser.param_groups:
+            print(param_group['lr'])
+            param_group['lr'] /= factor
+
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
-    def train_q_network(self, transitions):
+    def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
         # Set all the gradients stored in the optimiser to zero.
         self.optimiser.zero_grad()
         # Calculate the loss for this transition.
-        loss = self._calculate_loss(transitions)
+        loss = self._calculate_loss(transitions, discount_factor, use_target_network)
         # Compute the gradients based on this loss, i.e. the gradients of the loss with respect to the Q-network parameters.
         loss.backward()
         # Take one gradient step to update the Q-network.
@@ -141,7 +154,7 @@ class DQN:
         return loss.item()
 
     # Function to calculate the loss for a batch of transitions
-    def _calculate_loss(self, transitions):
+    def _calculate_loss(self, transitions, discount_factor=0.9, use_target_network=False):
         first_states = np.zeros((len(transitions), 2), dtype=np.float32)
         action_idxs = np.zeros(len(transitions), dtype=np.int64)
         experienced_rewards = np.zeros(len(transitions), dtype=np.float32)
@@ -150,59 +163,175 @@ class DQN:
         for i,t in enumerate(transitions):
             first_states[i], action_idxs[i], experienced_rewards[i], second_states[i] = t
 
-        first_state_output = self.q_network.forward(torch.tensor(first_states))
-        second_state_output = self.q_network.forward(torch.tensor(second_states))
+        if use_target_network:
+            first_state_output = self.target_network.forward(torch.tensor(first_states))
+            second_state_output = self.target_network.forward(torch.tensor(second_states))
+        else:
+            first_state_output = self.q_network.forward(torch.tensor(first_states))
+            second_state_output = self.q_network.forward(torch.tensor(second_states))
 
         first_state_values = first_state_output.gather(dim=1, index=torch.tensor(action_idxs).unsqueeze(-1)).squeeze(-1)
         second_state_max_values = torch.max(second_state_output, dim=1)[0]
 
-        bellman_values = torch.tensor(experienced_rewards) + (0.9 * second_state_max_values)
+        bellman_values = torch.tensor(experienced_rewards) + (discount_factor * second_state_max_values)
 
         return torch.nn.MSELoss()(first_state_values, bellman_values)
 
-# Main entry point
-if __name__ == "__main__":
+    def get_q_values(self):
+        # need to generate a tensor of states, where each state represents the center of a square on the grid
+        state_grid = np.zeros((10,10,2), dtype=np.float32)
+        for row in range(10):
+            for col in range(10):
+                x = (col / 10.0) + 0.05
+                y = (row / 10.0) + 0.05
+                state_grid[row,col] = (x,y)
+
+        q_values = self.target_network.forward(torch.tensor(state_grid.reshape((100,2)))).detach().numpy().reshape((10,10,4))
+        return q_values
+
+def generate_test_q_values():
+    q_grid = np.zeros((10,10,4), dtype=np.float32)
+    for row in range(10):
+        for col in range(10):
+            if row == 0 and col == 0:
+                q_grid[row,col] = np.array([0,1,0,0])
+            else:
+                q_grid[row,col] = np.array([0,0,0,1])
+    return q_grid
+
+def train_without_target_network():
+    # Initialise some parameters
+    num_eps = 100
+    ep_length = 20
 
     # Create an environment.
     # If display is True, then the environment will be displayed after every agent step. This can be set to False to speed up training time. The evaluation in part 2 of the coursework will be done based on the time with display=False.
     # Magnification determines how big the window will be when displaying the environment on your monitor. For desktop monitors, a value of 1000 should be about right. For laptops, a value of 500 should be about right. Note that this value does not affect the underlying state space or the learning, just the visualisation of the environment.
     environment = Environment(display=True, magnification=500)
-    # Create an agent
+    q_vis = QValueVisualiser(environment)
     agent = Agent(environment)
-    # Create a DQN (Deep Q-Network)
-    dqn = DQN()
-    # Create an experience replay buffer to record transitions
     buffer = ReplayBuffer()
+
+    # Initialise Q network and target network
+    dqn = DQN()
 
     losses = []
     iterations = []
 
     fig, ax = plt.subplots()
-    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN')
+    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN (no target network)')
 
     # Loop over episodes
-    for ep_idx in tqdm(range(1000)):
+    for ep_idx in tqdm(range(num_eps)):
         # Reset the environment for the start of the episode.
         agent.reset()
         # Initialise average loss for this episode
         episode_loss_average = 0
         # Loop over steps within this episode. The episode length here is 20.
-        for step_num in range(20):
+        for step_num in range(ep_length):
             # Step the agent once, and record the transition tuple
             transition = agent.step()
-
             buffer.record_transition(transition)
-            # Train the DQN on a random sample from the replay buffer
+
+            # Train the Q NETWORK on a random sample from the replay buffer
             if buffer.length() >= 100:
-                training_sample = buffer.sample_random_transitions(100)
-                loss = dqn.train_q_network(training_sample)
+                training_sample = buffer.sample_random_transitions(200)
+                loss = dqn.train_network(training_sample)
+
                 # update the episode loss average
                 episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
 
         if buffer.length() >= 100:
             iterations.append(ep_idx)
             losses.append(episode_loss_average)
-            ax.plot(iterations, losses, color='blue')
-            plt.yscale('log')
-            plt.show()
-            fig.savefig("loss_vs_iterations.png")
+
+        if ep_idx > 0 and ep_idx % 25 == 0:
+            dqn.decrease_learning_rate(10)
+   
+    ax.plot(iterations, losses, color='blue')
+    plt.yscale('log')
+    plt.show()
+    fig.savefig("3a.png")
+    
+    final_q_values = dqn.get_q_values()
+    q_vis.draw_q_values(final_q_values, '4a.png')
+
+    # compute greedy policy based on q values
+    policy = np.zeros((10,10,2), dtype=np.float32)
+    for row in range(10):
+        for col in range(10):
+            action_values = final_q_values[row,col]
+            best_action_idx = np.argmax(action_values)
+            policy[row,col] = agent._discrete_action_to_continuous(best_action_idx)
+    environment.draw_greedy_policy(policy, 25, "4b.png")
+
+def train_with_target_network():
+    # Initialise some parameters
+    num_eps = 100
+    ep_length = 20
+
+    # Create an environment.
+    # If display is True, then the environment will be displayed after every agent step. This can be set to False to speed up training time. The evaluation in part 2 of the coursework will be done based on the time with display=False.
+    # Magnification determines how big the window will be when displaying the environment on your monitor. For desktop monitors, a value of 1000 should be about right. For laptops, a value of 500 should be about right. Note that this value does not affect the underlying state space or the learning, just the visualisation of the environment.
+    environment = Environment(display=True, magnification=500)
+    q_vis = QValueVisualiser(environment)
+    agent = Agent(environment)
+    buffer = ReplayBuffer()
+
+    # Initialise Q network and target network
+    dqn = DQN()
+
+    losses = []
+    iterations = []
+
+    fig, ax = plt.subplots()
+    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN (target network)')
+
+    # Loop over episodes
+    for ep_idx in tqdm(range(num_eps)):
+        # Reset the environment for the start of the episode.
+        agent.reset()
+        # Initialise average loss for this episode
+        episode_loss_average = 0
+        # Loop over steps within this episode. The episode length here is 20.
+        for step_num in range(ep_length):
+            # Step the agent once, and record the transition tuple
+            transition = agent.step()
+            buffer.record_transition(transition)
+
+            # Train the Q NETWORK on a random sample from the replay buffer
+            if buffer.length() >= 100:
+                training_sample = buffer.sample_random_transitions(200)
+                loss = dqn.train_network(training_sample, use_target_network=True)
+
+                # update the episode loss average
+                episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
+
+        if buffer.length() >= 100:
+            iterations.append(ep_idx)
+            losses.append(episode_loss_average)
+
+        # if ep_idx > 0 and ep_idx % 25 == 0:
+        #     dqn.decrease_learning_rate(10)
+   
+    ax.plot(iterations, losses, color='blue')
+    plt.yscale('log')
+    plt.show()
+    fig.savefig("3b.png")
+    
+    final_q_values = dqn.get_q_values()
+    q_vis.draw_q_values(final_q_values, '4a.png')
+
+    # compute greedy policy based on q values
+    policy = np.zeros((10,10,2), dtype=np.float32)
+    for row in range(10):
+        for col in range(10):
+            action_values = final_q_values[row,col]
+            best_action_idx = np.argmax(action_values)
+            policy[row,col] = agent._discrete_action_to_continuous(best_action_idx)
+    environment.draw_greedy_policy(policy, 25, "4b.png")
+
+
+# Main entry point
+if __name__ == "__main__":
+    train_without_target_network()

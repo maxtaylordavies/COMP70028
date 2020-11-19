@@ -37,8 +37,8 @@ class Environment:
         # Compute the distance to the goal
         distance_to_goal = np.linalg.norm(next_state - self.goal_state)
         # Draw and show the environment, if required
-        if self.display:
-            self.draw(next_state)
+        # if self.display:
+        #     self.draw(next_state)
         # Return the next state and the distance to the goal
         return next_state, distance_to_goal
 
@@ -74,4 +74,26 @@ class Environment:
         cv2.imshow("Environment", self.image)
         # This line is necessary to give time for the image to be rendered on the screen
         cv2.waitKey(1)
+
+    # policy should be 10x10x2 tensor, storing the greedy (x,y) action to take in each state of the grid
+    def draw_greedy_policy(self, policy, episode_length, fn):
+        thickness = 10
+  
+        # first draw the environment
+        self.draw(self.init_state)
+
+        # step through the optimal policy beginning at the given start state
+        current_state = self.init_state
+        for step_idx in range(episode_length):
+            # compute next state based on greedy action
+            action = policy[int(current_state[1]) * 10, int(current_state[0]) * 10]
+            next_state, _ = self.step(current_state, action) 
+            # draw a green line between current state and next state
+            cv2.rectangle(self.image, (int(current_state[0] * self.magnification), int((1-current_state[1]) * self.magnification)), (int(next_state[0] * self.magnification), int((1-next_state[1]) * self.magnification)), (0,255,0), thickness)
+            # update current state
+            current_state = next_state
+        
+        cv2.imshow("Policy", self.image)
+        cv2.imwrite(fn, self.image)
+
 

@@ -13,20 +13,20 @@ class QValueVisualiser:
         # Create the initial q values image
         self.q_values_image = np.zeros([int(self.magnification), int(self.magnification), 3], dtype=np.uint8)
 
-    def draw_q_values(self, q_values):
+    def draw_q_values(self, q_values, fn):
         # Create an empty image
         self.q_values_image.fill(0)
         # Loop over the grid cells and actions, and draw each q value
-        for col in range(10):
-            for row in range(10):
+        for row in range(10):
+            for col in range(10):
                 # Find the q value ranges for this state
-                max_q_value = np.max(q_values[col, row])
-                min_q_value = np.min(q_values[col, row])
+                max_q_value = np.max(q_values[row, col])
+                min_q_value = np.min(q_values[row, col])
                 q_value_range = max_q_value - min_q_value
                 # Draw the q values for this state
                 for action in range(4):
                     # Normalise the q value with respect to the minimum and maximum q values
-                    q_value_norm = (q_values[col, row, action] - min_q_value) / q_value_range
+                    q_value_norm = (q_values[row, col, action] - min_q_value) / q_value_range
                     # Draw this q value
                     x = (col / 10.0) + 0.05
                     y = (row / 10.0) + 0.05
@@ -34,7 +34,7 @@ class QValueVisualiser:
         # Draw the grid cells
         self._draw_grid_cells()
         # Show the image
-        cv2.imwrite('q_values_image.png', self.q_values_image)
+        cv2.imwrite(fn, self.q_values_image)
         cv2.imshow("Q Values", self.q_values_image)
         cv2.waitKey(1)
 
