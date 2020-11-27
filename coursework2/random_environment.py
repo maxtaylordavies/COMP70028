@@ -15,14 +15,21 @@ import cv2
 class Environment:
 
     # Function to initialise an Environment object
-    def __init__(self,  magnification):
+    def __init__(self, magnification):
         # Set the magnification factor of the display
         self.magnification = magnification
         # Set the width and height of the environment
         self.width = 1.0
         self.height = 1.0
         # Create an image which will be used to display the environment
-        self.image = np.zeros([int(self.magnification * self.height), int(self.magnification * self.width), 3], dtype=np.uint8)
+        self.image = np.zeros(
+            [
+                int(self.magnification * self.height),
+                int(self.magnification * self.width),
+                3,
+            ],
+            dtype=np.uint8,
+        )
         # Define the space of the environment
         self.init_state = None
         self.free_blocks = None
@@ -58,8 +65,12 @@ class Environment:
                 block_bottom_min = prev_bottom - (block_height - 0.05)
                 block_bottom_mid = 0.5 * (block_bottom_min + block_bottom_max)
                 block_bottom_half_range = block_bottom_max - block_bottom_mid
-                r1 = np.random.uniform(-block_bottom_half_range, block_bottom_half_range)
-                r2 = np.random.uniform(-block_bottom_half_range, block_bottom_half_range)
+                r1 = np.random.uniform(
+                    -block_bottom_half_range, block_bottom_half_range
+                )
+                r2 = np.random.uniform(
+                    -block_bottom_half_range, block_bottom_half_range
+                )
                 if np.fabs(r1) > np.fabs(r2):
                     block_bottom = block_bottom_mid + r1
                 else:
@@ -70,7 +81,12 @@ class Environment:
                 block_right = block_left + block_width
                 top_left = (block_left, block_top)
                 bottom_right = (block_right, block_bottom)
-                if block_bottom < 0 or block_top > 1 or block_left < 0 or block_right > 1:
+                if (
+                    block_bottom < 0
+                    or block_top > 1
+                    or block_left < 0
+                    or block_right > 1
+                ):
                     is_within_boundary = False
                 else:
                     is_within_boundary = True
@@ -92,7 +108,10 @@ class Environment:
         block = (top_left, bottom_right)
         self.free_blocks.append(block)
         # Set the goal state
-        self.goal_state = np.array([0.95, np.random.uniform(block_bottom + 0.01, block_top - 0.01)], dtype=np.float32)
+        self.goal_state = np.array(
+            [0.95, np.random.uniform(block_bottom + 0.01, block_top - 0.01)],
+            dtype=np.float32,
+        )
 
     # Function to reset the environment, which is done at the start of each episode
     def reset(self):
@@ -107,12 +126,20 @@ class Environment:
             # Determine what the new state would be if the agent could move there
             next_state = state + action
             # If this state is outside the environment's perimeters, then the agent stays still
-            if next_state[0] < 0.0 or next_state[0] > 1.0 or next_state[1] < 0.0 or next_state[1] > 1.0:
+            if (
+                next_state[0] < 0.0
+                or next_state[0] > 1.0
+                or next_state[1] < 0.0
+                or next_state[1] > 1.0
+            ):
                 next_state = state
             # If this state is inside the walls, then the agent stays still
             is_agent_in_free_space = False
             for block in self.free_blocks:
-                if block[0][0] < next_state[0] < block[1][0] and block[1][1] < next_state[1] < block[0][1]:
+                if (
+                    block[0][0] < next_state[0] < block[1][0]
+                    and block[1][1] < next_state[1] < block[0][1]
+                ):
                     is_agent_in_free_space = True
                     break
             if not is_agent_in_free_space:
@@ -127,19 +154,43 @@ class Environment:
         # Create the background / obstacle
         window_top_left = (0, 0)
         window_bottom_right = (self.magnification * 1, self.magnification * 1)
-        cv2.rectangle(self.image, window_top_left, window_bottom_right, (50, 50, 50), thickness=cv2.FILLED)
+        cv2.rectangle(
+            self.image,
+            window_top_left,
+            window_bottom_right,
+            (50, 50, 50),
+            thickness=cv2.FILLED,
+        )
         # Draw all the free space
         for block in self.free_blocks:
-            top_left = (int(self.magnification * block[0][0]), int(self.magnification * (1 - block[0][1])))
-            bottom_right = (int(self.magnification * block[1][0]), int(self.magnification * (1 - block[1][1])))
-            cv2.rectangle(self.image, top_left, bottom_right, (246, 238, 229), thickness=cv2.FILLED)
+            top_left = (
+                int(self.magnification * block[0][0]),
+                int(self.magnification * (1 - block[0][1])),
+            )
+            bottom_right = (
+                int(self.magnification * block[1][0]),
+                int(self.magnification * (1 - block[1][1])),
+            )
+            cv2.rectangle(
+                self.image,
+                top_left,
+                bottom_right,
+                (246, 238, 229),
+                thickness=cv2.FILLED,
+            )
         # Draw the agent
-        agent_centre = (int(agent_state[0] * self.magnification), int((1 - agent_state[1]) * self.magnification))
+        agent_centre = (
+            int(agent_state[0] * self.magnification),
+            int((1 - agent_state[1]) * self.magnification),
+        )
         agent_radius = int(0.01 * self.magnification)
         agent_colour = (50, 50, 200)
         cv2.circle(self.image, agent_centre, agent_radius, agent_colour, cv2.FILLED)
         # Draw the goal
-        goal_centre = (int(self.goal_state[0] * self.magnification), int((1 - self.goal_state[1]) * self.magnification))
+        goal_centre = (
+            int(self.goal_state[0] * self.magnification),
+            int((1 - self.goal_state[1]) * self.magnification),
+        )
         goal_radius = int(0.01 * self.magnification)
         goal_colour = (200, 50, 50)
         cv2.circle(self.image, goal_centre, goal_radius, goal_colour, cv2.FILLED)

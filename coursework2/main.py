@@ -12,10 +12,11 @@ from q_value_visualiser import QValueVisualiser
 # Turn on interactive mode for PyPlot, to prevent the displayed graph from blocking the program flow
 plt.ion()
 
+
 class ReplayBuffer:
     def __init__(self):
         self.buffer = collections.deque(maxlen=5000)
-    
+
     def record_transition(self, transition):
         self.buffer.append(transition)
 
@@ -25,6 +26,7 @@ class ReplayBuffer:
 
     def length(self):
         return len(self.buffer)
+
 
 # The Agent class allows the agent to interact with the environment.
 class Agent:
@@ -59,11 +61,17 @@ class Agent:
     # Function to make the agent take one step in the environment.
     def step(self, policy=None):
         # Choose the next action.
-        discrete_action = self._choose_random_action() if policy is None else self._choose_epsilon_greedy_action(policy)
+        discrete_action = (
+            self._choose_random_action()
+            if policy is None
+            else self._choose_epsilon_greedy_action(policy)
+        )
         # Convert the discrete action into a continuous action.
         continuous_action = self._discrete_action_to_continuous(discrete_action)
         # Take one step in the environment, using this continuous action, based on the agent's current state. This returns the next state, and the new distance to the goal from this new state. It also draws the environment, if display=True was set when creating the environment object..
-        next_state, distance_to_goal = self.environment.step(self.state, continuous_action)
+        next_state, distance_to_goal = self.environment.step(
+            self.state, continuous_action
+        )
         # Compute the reward for this paction.
         reward = self._compute_reward(distance_to_goal)
         # Create a transition tuple for this step.
@@ -103,7 +111,7 @@ class Agent:
 
     # Function for the agent to compute its reward. In this example, the reward is based on the agent's distance to the goal after the agent takes an action.
     def _compute_reward(self, distance_to_goal):
-        reward = float(0.1*(1 - distance_to_goal))
+        reward = float(0.1 * (1 - distance_to_goal))
         return reward
 
 
@@ -117,7 +125,9 @@ class Network(torch.nn.Module):
         # Define the network layers. This example network has two hidden layers, each with 100 units.
         self.layer_1 = torch.nn.Linear(in_features=input_dimension, out_features=100)
         self.layer_2 = torch.nn.Linear(in_features=100, out_features=100)
-        self.output_layer = torch.nn.Linear(in_features=100, out_features=output_dimension)
+        self.output_layer = torch.nn.Linear(
+            in_features=100, out_features=output_dimension
+        )
 
     # Function which sends some input data through the network and returns the network's output. In this example, a ReLU activation function is used for both hidden layers, but the output layer has no activation function (it is just a linear layer).
     def forward(self, input):
@@ -145,7 +155,7 @@ class DQN:
 
     def decrease_learning_rate(self, factor):
         for param_group in self.optimiser.param_groups:
-            param_group['lr'] /= factor
+            param_group["lr"] /= factor
 
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
     def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
@@ -161,48 +171,67 @@ class DQN:
         return loss.item()
 
     # Function to calculate the loss for a batch of transitions
-    def _calculate_loss(self, transitions, discount_factor=0.9, use_target_network=False):
+    def _calculate_loss(
+        self, transitions, discount_factor=0.9, use_target_network=False
+    ):
         first_states = np.zeros((len(transitions), 2), dtype=np.float32)
         action_idxs = np.zeros(len(transitions), dtype=np.int64)
         experienced_rewards = np.zeros(len(transitions), dtype=np.float32)
         second_states = np.zeros((len(transitions), 2), dtype=np.float32)
 
-        for i,t in enumerate(transitions):
-            first_states[i], action_idxs[i], experienced_rewards[i], second_states[i] = t
+        for i, t in enumerate(transitions):
+            (
+                first_states[i],
+                action_idxs[i],
+                experienced_rewards[i],
+                second_states[i],
+            ) = t
 
         first_state_output = self.q_network.forward(torch.tensor(first_states))
         if use_target_network:
-            second_state_output = self.target_network.forward(torch.tensor(second_states))
+            second_state_output = self.target_network.forward(
+                torch.tensor(second_states)
+            )
         else:
             second_state_output = self.q_network.forward(torch.tensor(second_states))
 
-        first_state_values = first_state_output.gather(dim=1, index=torch.tensor(action_idxs).unsqueeze(-1)).squeeze(-1)
+        first_state_values = first_state_output.gather(
+            dim=1, index=torch.tensor(action_idxs).unsqueeze(-1)
+        ).squeeze(-1)
         second_state_max_values = torch.max(second_state_output, dim=1)[0]
 
-        bellman_values = torch.tensor(experienced_rewards) + (discount_factor * second_state_max_values)
+        bellman_values = torch.tensor(experienced_rewards) + (
+            discount_factor * second_state_max_values
+        )
 
         return torch.nn.MSELoss()(first_state_values, bellman_values)
 
     def get_q_values(self):
         # need to generate a tensor of states, where each state represents the center of a square on the grid
-        state_grid = np.zeros((10,10,2), dtype=np.float32)
+        state_grid = np.zeros((10, 10, 2), dtype=np.float32)
         for row in range(10):
             for col in range(10):
                 x = (col / 10.0) + 0.05
                 y = (row / 10.0) + 0.05
-                state_grid[row,col] = (x,y)
+                state_grid[row, col] = (x, y)
 
-        q_values = self.target_network.forward(torch.tensor(state_grid.reshape((100,2)))).detach().numpy().reshape((10,10,4))
+        q_values = (
+            self.target_network.forward(torch.tensor(state_grid.reshape((100, 2))))
+            .detach()
+            .numpy()
+            .reshape((10, 10, 4))
+        )
         return q_values
 
     def get_greedy_policy(self):
         q_values = self.get_q_values()
-        policy = np.zeros((10,10))
+        policy = np.zeros((10, 10))
         for row in range(10):
             for col in range(10):
-                action_values = q_values[row,col]
-                policy[row,col] = np.argmax(action_values)
+                action_values = q_values[row, col]
+                policy[row, col] = np.argmax(action_values)
         return policy
+
 
 def train_without_target_network():
     # Initialise some parameters
@@ -224,7 +253,11 @@ def train_without_target_network():
     iterations = []
 
     fig, ax = plt.subplots()
-    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN (no target network)')
+    ax.set(
+        xlabel="Iteration",
+        ylabel="Loss",
+        title="Loss Curve for DQN (no target network)",
+    )
 
     # Loop over episodes
     for ep_idx in tqdm(range(num_eps)):
@@ -244,7 +277,7 @@ def train_without_target_network():
                 loss = dqn.train_network(training_sample)
 
                 # update the episode loss average
-                episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
+                episode_loss_average += (loss - episode_loss_average) / (step_num + 1)
 
         if buffer.length() >= 100:
             iterations.append(ep_idx)
@@ -252,23 +285,24 @@ def train_without_target_network():
 
         if ep_idx > 0 and ep_idx % 25 == 0:
             dqn.decrease_learning_rate(10)
-   
-    ax.plot(iterations, losses, color='blue')
-    plt.yscale('log')
+
+    ax.plot(iterations, losses, color="blue")
+    plt.yscale("log")
     plt.show()
     fig.savefig("3a.png")
-    
+
     final_q_values = dqn.get_q_values()
-    q_vis.draw_q_values(final_q_values, '4a.png')
+    q_vis.draw_q_values(final_q_values, "4a.png")
 
     # compute greedy policy based on q values
-    policy = np.zeros((10,10,2), dtype=np.float32)
+    policy = np.zeros((10, 10, 2), dtype=np.float32)
     for row in range(10):
         for col in range(10):
-            action_values = final_q_values[row,col]
+            action_values = final_q_values[row, col]
             best_action_idx = np.argmax(action_values)
-            policy[row,col] = agent._discrete_action_to_continuous(best_action_idx)
+            policy[row, col] = agent._discrete_action_to_continuous(best_action_idx)
     environment.draw_greedy_policy(policy, 25, "4b.png")
+
 
 def train_with_target_network():
     # Initialise some parameters
@@ -290,7 +324,11 @@ def train_with_target_network():
     iterations = []
 
     fig, ax = plt.subplots()
-    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN (target network)')
+    ax.set(
+        xlabel="Iteration",
+        ylabel="Loss",
+        title="Loss Curve for DQN (target network)",
+    )
 
     # Loop over episodes
     for ep_idx in tqdm(range(num_eps)):
@@ -310,7 +348,7 @@ def train_with_target_network():
                 loss = dqn.train_network(training_sample, use_target_network=True)
 
                 # update the episode loss average
-                episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
+                episode_loss_average += (loss - episode_loss_average) / (step_num + 1)
 
         if buffer.length() >= 100:
             iterations.append(ep_idx)
@@ -318,23 +356,24 @@ def train_with_target_network():
 
         if ep_idx > 0 and ep_idx % 10 == 0:
             dqn.copy_weights()
-   
-    ax.plot(iterations, losses, color='blue')
-    plt.yscale('log')
+
+    ax.plot(iterations, losses, color="blue")
+    plt.yscale("log")
     plt.show()
     fig.savefig("3b.png")
-    
+
     final_q_values = dqn.get_q_values()
-    q_vis.draw_q_values(final_q_values, '4a_target.png')
+    q_vis.draw_q_values(final_q_values, "4a_target.png")
 
     # compute greedy policy based on q values
-    policy = np.zeros((10,10,2), dtype=np.float32)
+    policy = np.zeros((10, 10, 2), dtype=np.float32)
     for row in range(10):
         for col in range(10):
-            action_values = final_q_values[row,col]
+            action_values = final_q_values[row, col]
             best_action_idx = np.argmax(action_values)
-            policy[row,col] = agent._discrete_action_to_continuous(best_action_idx)
+            policy[row, col] = agent._discrete_action_to_continuous(best_action_idx)
     environment.draw_greedy_policy(policy, 20, "4b_target.png")
+
 
 def train_epsilon_greedy():
     # Initialise some parameters
@@ -356,7 +395,11 @@ def train_epsilon_greedy():
     iterations = []
 
     fig, ax = plt.subplots()
-    ax.set(xlabel='Iteration', ylabel='Loss', title='Loss Curve for DQN (epsilon-greedy)')
+    ax.set(
+        xlabel="Iteration",
+        ylabel="Loss",
+        title="Loss Curve for DQN (epsilon-greedy)",
+    )
 
     # Loop over episodes
     for ep_idx in tqdm(range(num_eps)):
@@ -377,7 +420,7 @@ def train_epsilon_greedy():
                 loss = dqn.train_network(training_sample)
 
                 # update the episode loss average
-                episode_loss_average += (loss - episode_loss_average)/(step_num + 1)
+                episode_loss_average += (loss - episode_loss_average) / (step_num + 1)
 
         if buffer.length() >= 200:
             iterations.append(ep_idx)
@@ -385,22 +428,22 @@ def train_epsilon_greedy():
 
         if ep_idx != 0 and ep_idx % 400 == 0:
             dqn.decrease_learning_rate(5)
-   
-    ax.plot(iterations, losses, color='blue')
-    plt.yscale('log')
+
+    ax.plot(iterations, losses, color="blue")
+    plt.yscale("log")
     plt.show()
     fig.savefig("epsilon_loss_curve.png")
-    
+
     final_q_values = dqn.get_q_values()
-    q_vis.draw_q_values(final_q_values, '4a.png')
+    q_vis.draw_q_values(final_q_values, "4a.png")
 
     # compute greedy policy based on q values
-    policy = np.zeros((10,10,2), dtype=np.float32)
+    policy = np.zeros((10, 10, 2), dtype=np.float32)
     for row in range(10):
         for col in range(10):
-            action_values = final_q_values[row,col]
+            action_values = final_q_values[row, col]
             best_action_idx = np.argmax(action_values)
-            policy[row,col] = agent._discrete_action_to_continuous(best_action_idx)
+            policy[row, col] = agent._discrete_action_to_continuous(best_action_idx)
     environment.draw_greedy_policy(policy, 25, "4b.png")
 
 

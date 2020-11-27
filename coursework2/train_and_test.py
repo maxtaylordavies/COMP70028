@@ -60,6 +60,6 @@ if __name__ == "__main__":
 
     # Print out the result
     if has_reached_goal:
-        print('Reached goal in ' + str(step_num) + ' steps.')
+        print("Reached goal in " + str(step_num) + " steps.")
     else:
-        print('Did not reach goal. Final distance = ' + str(distance_to_goal))
+        print("Did not reach goal. Final distance = " + str(distance_to_goal))

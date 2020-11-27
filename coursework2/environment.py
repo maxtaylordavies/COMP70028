@@ -18,7 +18,9 @@ class Environment:
         # Set the space which the obstacle occupies
         self.obstacle_space = np.array([[0.0, 0.7], [0.4, 0.5]], dtype=np.float32)
         # Create an image which will be used to display the environment
-        self.image = np.zeros([int(self.magnification), int(self.magnification), 3], dtype=np.uint8)
+        self.image = np.zeros(
+            [int(self.magnification), int(self.magnification), 3], dtype=np.uint8
+        )
 
     # Function to reset the environment, which is done at the start of each episode
     def reset(self):
@@ -29,10 +31,18 @@ class Environment:
         # Determine what the new state would be if the agent could move there
         next_state = state + action
         # If this state is outside the environment's perimeters, then the agent stays still
-        if next_state[0] < 0.0 or next_state[0] > 1.0 or next_state[1] < 0.0 or next_state[1] > 1.0:
+        if (
+            next_state[0] < 0.0
+            or next_state[0] > 1.0
+            or next_state[1] < 0.0
+            or next_state[1] > 1.0
+        ):
             next_state = state
         # If this state is inside the obstacle, then the agent stays still
-        if self.obstacle_space[0, 0] <= next_state[0] < self.obstacle_space[0, 1] and self.obstacle_space[1, 0] <= next_state[1] < self.obstacle_space[1, 1]:
+        if (
+            self.obstacle_space[0, 0] <= next_state[0] < self.obstacle_space[0, 1]
+            and self.obstacle_space[1, 0] <= next_state[1] < self.obstacle_space[1, 1]
+        ):
             next_state = state
         # Compute the distance to the goal
         distance_to_goal = np.linalg.norm(next_state - self.goal_state)
@@ -47,26 +57,57 @@ class Environment:
         # Create the background image
         window_top_left = (0, 0)
         window_bottom_right = (self.magnification * 1, self.magnification * 1)
-        cv2.rectangle(self.image, window_top_left, window_bottom_right, (246, 238, 229), thickness=cv2.FILLED)
+        cv2.rectangle(
+            self.image,
+            window_top_left,
+            window_bottom_right,
+            (246, 238, 229),
+            thickness=cv2.FILLED,
+        )
         # Draw the obstacle
         obstacle_left = int(self.magnification * self.obstacle_space[0, 0])
         obstacle_top = int(self.magnification * (1 - self.obstacle_space[1, 1]))
-        obstacle_width = int(self.magnification * (self.obstacle_space[0, 1] - self.obstacle_space[0, 0]))
-        obstacle_height = int(self.magnification * (self.obstacle_space[1, 1] - self.obstacle_space[1, 0]))
+        obstacle_width = int(
+            self.magnification * (self.obstacle_space[0, 1] - self.obstacle_space[0, 0])
+        )
+        obstacle_height = int(
+            self.magnification * (self.obstacle_space[1, 1] - self.obstacle_space[1, 0])
+        )
         obstacle_top_left = (obstacle_left, obstacle_top)
-        obstacle_bottom_right = (obstacle_left + obstacle_width, obstacle_top + obstacle_height)
-        cv2.rectangle(self.image, obstacle_top_left, obstacle_bottom_right, (0, 0, 150), thickness=cv2.FILLED)
+        obstacle_bottom_right = (
+            obstacle_left + obstacle_width,
+            obstacle_top + obstacle_height,
+        )
+        cv2.rectangle(
+            self.image,
+            obstacle_top_left,
+            obstacle_bottom_right,
+            (0, 0, 150),
+            thickness=cv2.FILLED,
+        )
         # Create the border
         border_top_left = (0, 0)
         border_bottom_right = (self.magnification * 1, self.magnification * 1)
-        cv2.rectangle(self.image, border_top_left, border_bottom_right, (0, 0, 0), thickness=int(self.magnification * 0.02))
+        cv2.rectangle(
+            self.image,
+            border_top_left,
+            border_bottom_right,
+            (0, 0, 0),
+            thickness=int(self.magnification * 0.02),
+        )
         # Draw the agent
-        agent_centre = (int(agent_state[0] * self.magnification), int((1 - agent_state[1]) * self.magnification))
+        agent_centre = (
+            int(agent_state[0] * self.magnification),
+            int((1 - agent_state[1]) * self.magnification),
+        )
         agent_radius = int(0.02 * self.magnification)
         agent_colour = (100, 199, 246)
         cv2.circle(self.image, agent_centre, agent_radius, agent_colour, cv2.FILLED)
         # Draw the goal
-        goal_centre = (int(self.goal_state[0] * self.magnification), int((1 - self.goal_state[1]) * self.magnification))
+        goal_centre = (
+            int(self.goal_state[0] * self.magnification),
+            int((1 - self.goal_state[1]) * self.magnification),
+        )
         goal_radius = int(0.02 * self.magnification)
         goal_colour = (227, 158, 71)
         cv2.circle(self.image, goal_centre, goal_radius, goal_colour, cv2.FILLED)
@@ -78,7 +119,7 @@ class Environment:
     # policy should be 10x10x2 tensor, storing the greedy (x,y) action to take in each state of the grid
     def draw_greedy_policy(self, policy, episode_length, fn):
         thickness = 10
-  
+
         # first draw the environment
         self.draw(self.init_state)
 
@@ -87,13 +128,23 @@ class Environment:
         for step_idx in range(episode_length):
             # compute next state based on greedy action
             action = policy[int(current_state[1]) * 10, int(current_state[0]) * 10]
-            next_state, _ = self.step(current_state, action) 
+            next_state, _ = self.step(current_state, action)
             # draw a green line between current state and next state
-            cv2.rectangle(self.image, (int(current_state[0] * self.magnification), int((1-current_state[1]) * self.magnification)), (int(next_state[0] * self.magnification), int((1-next_state[1]) * self.magnification)), (0,255,0), thickness)
+            cv2.rectangle(
+                self.image,
+                (
+                    int(current_state[0] * self.magnification),
+                    int((1 - current_state[1]) * self.magnification),
+                ),
+                (
+                    int(next_state[0] * self.magnification),
+                    int((1 - next_state[1]) * self.magnification),
+                ),
+                (0, 255, 0),
+                thickness,
+            )
             # update current state
             current_state = next_state
-        
+
         cv2.imshow("Policy", self.image)
         cv2.imwrite(fn, self.image)
-
-

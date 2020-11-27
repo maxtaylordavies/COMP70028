@@ -50,13 +50,13 @@ class Agent:
         self.action = action
         return action
 
-    # Function to set the next state and distance, which resulted from applying action self.action at state self.state
-    def set_next_state_and_distance(self, next_state, distance_to_goal):
-        # Convert the distance to a reward
-        reward = 1 - distance_to_goal
-        # Create a transition
-        transition = (self.state, self.action, reward, next_state)
-        # Now you can do something with this transition ...
+    # # Function to set the next state and distance, which resulted from applying action self.action at state self.state
+    # def set_next_state_and_distance(self, next_state, distance_to_goal):
+    #     # Convert the distance to a reward
+    #     reward = 1 - distance_to_goal
+    #     # Create a transition
+    #     transition = (self.state, self.action, reward, next_state)
+    #     # Now you can do something with this transition ...
 
     # Function to get the greedy action for a particular state
     def get_greedy_action(self, state):
