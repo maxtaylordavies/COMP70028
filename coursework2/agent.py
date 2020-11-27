@@ -18,6 +18,15 @@
 import collections
 import torch
 import numpy as np
+from matplotlib import pyplot as plt
+
+plt.ion()
+fig, ax = plt.subplots()
+ax.set(
+    xlabel="Episodes",
+    ylabel="Average Loss",
+    title="Loss Curve",
+)
 
 
 class ReplayBuffer:
@@ -180,9 +189,9 @@ class Agent:
         # Exploration
         self.epsilon = 0.1
         # Minibatch size
-        self.minibatch_size = 10
+        self.minibatch_size = 100
         # Losses
-        self.losses = []
+        self.average_losses = [0]
         # Initialise an experience replay buffer
         self.buffer = ReplayBuffer()
         # Initialise a DQN
@@ -243,4 +252,13 @@ class Agent:
     def take_training_step(self):
         sample = self.buffer.sample_random_transitions(self.minibatch_size)
         loss = self.dqn.train_network(sample)
-        self.losses.append(loss)
+
+        self.average_losses[-1] += (
+            loss - self.average_losses[-1]
+        ) / self.num_steps_taken
+
+        if self.has_finished_episode():
+            ax.plot(self.average_losses, color="blue")
+            plt.yscale("log")
+            plt.show()
+            self.average_losses.append(0)
