@@ -56,6 +56,101 @@ class Network(torch.nn.Module):
         return output
 
 
+# The DQN class determines how to train the above neural network.
+class DQN:
+    # The class initialisation function.
+    def __init__(self):
+        # Create a Q-network, which predicts the q-value for a particular state.
+        self.q_network = Network(input_dimension=2, output_dimension=4)
+        # Create a target network, with same architecture as Q-network
+        self.target_network = Network(input_dimension=2, output_dimension=4)
+        self.copy_weights()
+        # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
+        self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.01)
+
+    def copy_weights(self):
+        self.target_network.load_state_dict(self.q_network.state_dict())
+
+    def decrease_learning_rate(self, factor):
+        for param_group in self.optimiser.param_groups:
+            param_group["lr"] /= factor
+
+    # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
+    def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
+        # Set all the gradients stored in the optimiser to zero.
+        self.optimiser.zero_grad()
+        # Calculate the loss for this transition.
+        loss = self._calculate_loss(transitions, discount_factor, use_target_network)
+        # Compute the gradients based on this loss, i.e. the gradients of the loss with respect to the Q-network parameters.
+        loss.backward()
+        # Take one gradient step to update the Q-network.
+        self.optimiser.step()
+        # Return the loss as a scalar
+        return loss.item()
+
+    # Function to calculate the loss for a batch of transitions
+    def _calculate_loss(
+        self, transitions, discount_factor=0.9, use_target_network=False
+    ):
+        first_states = np.zeros((len(transitions), 2), dtype=np.float32)
+        action_idxs = np.zeros(len(transitions), dtype=np.int64)
+        experienced_rewards = np.zeros(len(transitions), dtype=np.float32)
+        second_states = np.zeros((len(transitions), 2), dtype=np.float32)
+
+        for i, t in enumerate(transitions):
+            (
+                first_states[i],
+                action_idxs[i],
+                experienced_rewards[i],
+                second_states[i],
+            ) = t
+
+        first_state_output = self.q_network.forward(torch.tensor(first_states))
+        if use_target_network:
+            second_state_output = self.target_network.forward(
+                torch.tensor(second_states)
+            )
+        else:
+            second_state_output = self.q_network.forward(torch.tensor(second_states))
+
+        first_state_values = first_state_output.gather(
+            dim=1, index=torch.tensor(action_idxs).unsqueeze(-1)
+        ).squeeze(-1)
+        second_state_max_values = torch.max(second_state_output, dim=1)[0]
+
+        bellman_values = torch.tensor(experienced_rewards) + (
+            discount_factor * second_state_max_values
+        )
+
+        return torch.nn.MSELoss()(first_state_values, bellman_values)
+
+    def get_q_values(self):
+        # need to generate a tensor of states, where each state represents the center of a square on the grid
+        state_grid = np.zeros((10, 10, 2), dtype=np.float32)
+        for row in range(10):
+            for col in range(10):
+                x = (col / 10.0) + 0.05
+                y = (row / 10.0) + 0.05
+                state_grid[row, col] = (x, y)
+
+        q_values = (
+            self.target_network.forward(torch.tensor(state_grid.reshape((100, 2))))
+            .detach()
+            .numpy()
+            .reshape((10, 10, 4))
+        )
+        return q_values
+
+    def get_greedy_policy(self):
+        q_values = self.get_q_values()
+        policy = np.zeros((10, 10))
+        for row in range(10):
+            for col in range(10):
+                action_values = q_values[row, col]
+                policy[row, col] = np.argmax(action_values)
+        return policy
+
+
 class Agent:
     # Function to initialise the agent
     def __init__(self):
