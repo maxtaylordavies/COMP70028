@@ -162,6 +162,10 @@ class Agent:
         self.state = None
         # The action variable stores the latest action which the agent has applied to the environment
         self.action = None
+        # Initialise an experience replay buffer
+        self.buffer = ReplayBuffer()
+        # Initialise a DQN
+        self.dqn = DQN()
 
     # Function to check whether the agent has reached the end of an episode
     def has_finished_episode(self):
