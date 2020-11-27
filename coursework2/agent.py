@@ -133,31 +133,9 @@ class DQN:
 
         return torch.nn.MSELoss()(first_state_values, bellman_values)
 
-    def get_q_values(self):
-        # need to generate a tensor of states, where each state represents the center of a square on the grid
-        state_grid = np.zeros((10, 10, 2), dtype=np.float32)
-        for row in range(10):
-            for col in range(10):
-                x = (col / 10.0) + 0.05
-                y = (row / 10.0) + 0.05
-                state_grid[row, col] = (x, y)
-
-        q_values = (
-            self.target_network.forward(torch.tensor(state_grid.reshape((100, 2))))
-            .detach()
-            .numpy()
-            .reshape((10, 10, 4))
-        )
-        return q_values
-
-    def get_greedy_policy(self):
-        q_values = self.get_q_values()
-        policy = np.zeros((10, 10))
-        for row in range(10):
-            for col in range(10):
-                action_values = q_values[row, col]
-                policy[row, col] = np.argmax(action_values)
-        return policy
+    def get_q_values_for_state(self, state):
+        output = self.q_network.forward(torch.tensor(np.array([state])))
+        return output[0].detach().numpy()
 
 
 class Agent:
@@ -187,7 +165,7 @@ class Agent:
             dtype=np.float32,
         )
         # Exploration
-        self.epsilon = 0.1
+        self.epsilon = 0.3
         # Minibatch size
         self.minibatch_size = 100
         # Losses
@@ -207,7 +185,7 @@ class Agent:
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
         # Here, the action is random, but you can change this
-        action = self.choose_random_action()
+        action = self.choose_epsilon_greedy_action()
         # Update the number of steps which the agent has taken
         self.num_steps_taken += 1
         # Store the state; this will be used later, when storing the transition
@@ -234,9 +212,8 @@ class Agent:
 
     # Function to get the greedy action for a particular state
     def get_greedy_action(self, state):
-        # Here, the greedy action is fixed, but you should change it so that it returns the action with the highest Q-value
-        action = np.array([0.02, 0.0], dtype=np.float32)
-        return action
+        q_values = self.dqn.get_q_values_for_state(state)
+        return self.actions[np.argmax(q_values)]
 
     ############################################################################
     #                             NEW FUNCTIONS                                #
@@ -248,6 +225,12 @@ class Agent:
     def choose_random_action(self):
         idx = np.random.randint(len(self.actions))
         return self.actions[idx]
+
+    def choose_epsilon_greedy_action(self):
+        if np.random.random() <= self.epsilon or self.state is None:
+            return self.choose_random_action()
+        q_values = self.dqn.get_q_values_for_state(self.state)
+        return self.actions[np.argmax(q_values)]
 
     def take_training_step(self):
         sample = self.buffer.sample_random_transitions(self.minibatch_size)
