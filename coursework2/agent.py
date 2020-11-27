@@ -28,34 +28,17 @@ ax.set(
 )
 
 
-# class ReplayBuffer:
-#     def __init__(self):
-#         self.buffer = collections.deque(maxlen=5000)
-
-#     def record_transition(self, transition):
-#         self.buffer.append(transition)
-
-#     def sample_random_transitions(self, n):
-#         idxs = np.random.randint(len(self.buffer), size=n)
-#         return np.array([self.buffer[i] for i in idxs])
-
-#     def sample_prioritized_transitions(self, n):
-#         pass
-#         # weight inversely by reward - so prioritise samples with lower rewards
-
-#     def length(self):
-#         return len(self.buffer)
-
-
 class ReplayBuffer:
     def __init__(self, max_size):
         self.buffer = [None] * max_size
+        self.probs = [None] * max_size
         self.max_size = max_size
         self.index = 0
         self.size = 0
 
     def record_transition(self, transition):
         self.buffer[self.index] = transition
+        self.probs[self.index] = min(1 - transition[2], 0.2)
         self.size = min(self.size + 1, self.max_size)
         self.index = (self.index + 1) % self.max_size
 
@@ -64,8 +47,12 @@ class ReplayBuffer:
         return [self.buffer[idx] for idx in idxs]
 
     def sample_prioritized_transitions(self, n):
-        distribution = [1 - t[2] for t in self.buffer[: self.size]]
-        idxs = np.random.choice(np.arange(self.size), size=n, p=distribution)
+        probs = np.array(self.probs[: self.size])
+        idxs = np.random.choice(
+            np.arange(self.size),
+            size=n,
+            p=probs / sum(probs),
+        )
         return [self.buffer[idx] for idx in idxs]
 
     def length(self):
@@ -175,6 +162,7 @@ class Agent:
     def __init__(self):
         # Set the episode length
         self.episode_length = 1000
+        self.previous_episode_last_step = 0
         # Reset total number of episodes agent has experienced
         self.num_episodes = 0
         # Reset the total number of steps which the agent has taken
@@ -203,16 +191,15 @@ class Agent:
         # Losses
         self.average_losses = [0]
         # Initialise an experience replay buffer
-        self.buffer = ReplayBuffer(5000)
+        self.buffer = ReplayBuffer(10000)
         # Initialise a DQN
         self.dqn = DQN()
 
     # Function to check whether the agent has reached the end of an episode
     def has_finished_episode(self):
-        if self.num_steps_taken % self.episode_length == 0:
-            return True
-        else:
-            return False
+        return (
+            self.num_steps_taken - self.previous_episode_last_step
+        ) % self.episode_length == 0
 
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
@@ -251,6 +238,9 @@ class Agent:
             self.average_losses.append(0)
             self.num_episodes += 1
             self.decay_epsilon()
+            self.reduce_episode_length()
+            self.dqn.copy_weights()
+            print(self.episode_length, self.max_epsilon)
 
         self.epsilon = min(self.max_epsilon, distance_to_goal)
 
@@ -264,8 +254,11 @@ class Agent:
     ############################################################################
 
     def decay_epsilon(self):
-        self.max_epsilon *= 0.9
-        print(self.max_epsilon)
+        self.max_epsilon *= 0.92
+
+    def reduce_episode_length(self):
+        self.previous_episode_last_step = self.num_steps_taken
+        self.episode_length = max(self.episode_length - 50, 100)
 
     def get_last_action_idx(self):
         return (self.actions == self.action).all(axis=1).nonzero()[0][0]
@@ -282,7 +275,7 @@ class Agent:
 
     def take_training_step(self):
         sample = self.buffer.sample_random_transitions(self.minibatch_size)
-        loss = self.dqn.train_network(sample)
+        loss = self.dqn.train_network(sample, use_target_network=True)
 
         self.average_losses[-1] += (
             loss - self.average_losses[-1]
