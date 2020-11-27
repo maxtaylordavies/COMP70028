@@ -152,6 +152,10 @@ class DQN:
 
 
 class Agent:
+    ############################################################################
+    #                          REQUIRED FUNCTIONS                              #
+    ############################################################################
+
     # Function to initialise the agent
     def __init__(self):
         # Set the episode length
@@ -162,6 +166,10 @@ class Agent:
         self.state = None
         # The action variable stores the latest action which the agent has applied to the environment
         self.action = None
+        # Initialise discrete action space
+        self.actions = np.arange(3)
+        # Exploration
+        self.epsilon = 0.1
         # Initialise an experience replay buffer
         self.buffer = ReplayBuffer()
         # Initialise a DQN
@@ -199,3 +207,7 @@ class Agent:
         # Here, the greedy action is fixed, but you should change it so that it returns the action with the highest Q-value
         action = np.array([0.02, 0.0], dtype=np.float32)
         return action
+
+    ############################################################################
+    #                             NEW FUNCTIONS                                #
+    ############################################################################
