@@ -61,9 +61,9 @@ class DQN:
     # The class initialisation function.
     def __init__(self):
         # Create a Q-network, which predicts the q-value for a particular state.
-        self.q_network = Network(input_dimension=2, output_dimension=4)
+        self.q_network = Network(input_dimension=2, output_dimension=3)
         # Create a target network, with same architecture as Q-network
-        self.target_network = Network(input_dimension=2, output_dimension=4)
+        self.target_network = Network(input_dimension=2, output_dimension=3)
         self.copy_weights()
         # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.01)
@@ -167,13 +167,12 @@ class Agent:
         # The action variable stores the latest action which the agent has applied to the environment
         self.action = None
         # Step size
-        self.step_size = 0.01
+        self.step_size = 0.02
         # Initialise discrete action space
         self.actions = np.array(
             [
                 [self.step_size, 0],  # right
                 [0, self.step_size],  # up
-                [-self.step_size, 0],  # left
                 [0, -self.step_size],  # down
             ],
             dtype=np.float32,
@@ -215,7 +214,7 @@ class Agent:
         # Create and record a transition
         transition = (
             self.state,
-            np.where(np.isclose(self.actions, self.action))[0][0],
+            self.get_last_action_idx(),
             reward,
             next_state,
         )
@@ -233,6 +232,9 @@ class Agent:
     ############################################################################
     #                             NEW FUNCTIONS                                #
     ############################################################################
+
+    def get_last_action_idx(self):
+        return (self.actions == self.action).all(axis=1).nonzero()[0][0]
 
     def choose_random_action(self):
         idx = np.random.randint(len(self.actions))
