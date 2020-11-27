@@ -166,10 +166,24 @@ class Agent:
         self.state = None
         # The action variable stores the latest action which the agent has applied to the environment
         self.action = None
+        # Step size
+        self.step_size = 0.01
         # Initialise discrete action space
-        self.actions = np.arange(3)
+        self.actions = np.array(
+            [
+                [self.step_size, 0],  # right
+                [0, self.step_size],  # up
+                [-self.step_size, 0],  # left
+                [0, -self.step_size],  # down
+            ],
+            dtype=np.float32,
+        )
         # Exploration
         self.epsilon = 0.1
+        # Minibatch size
+        self.minibatch_size = 10
+        # Losses
+        self.losses = []
         # Initialise an experience replay buffer
         self.buffer = ReplayBuffer()
         # Initialise a DQN
@@ -185,7 +199,7 @@ class Agent:
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
         # Here, the action is random, but you can change this
-        action = np.random.uniform(low=-0.01, high=0.01, size=2).astype(np.float32)
+        action = self.choose_random_action()
         # Update the number of steps which the agent has taken
         self.num_steps_taken += 1
         # Store the state; this will be used later, when storing the transition
@@ -198,9 +212,17 @@ class Agent:
     def set_next_state_and_distance(self, next_state, distance_to_goal):
         # Convert the distance to a reward
         reward = 1 - distance_to_goal
-        # Create a transition
-        transition = (self.state, self.action, reward, next_state)
-        # Now you can do something with this transition ...
+        # Create and record a transition
+        transition = (
+            self.state,
+            np.where(np.isclose(self.actions, self.action))[0][0],
+            reward,
+            next_state,
+        )
+        self.buffer.record_transition(transition)
+        # If we have enough transitions stored, train the network
+        if self.buffer.length() >= self.minibatch_size:
+            self.take_training_step()
 
     # Function to get the greedy action for a particular state
     def get_greedy_action(self, state):
@@ -211,3 +233,12 @@ class Agent:
     ############################################################################
     #                             NEW FUNCTIONS                                #
     ############################################################################
+
+    def choose_random_action(self):
+        idx = np.random.randint(len(self.actions))
+        return self.actions[idx]
+
+    def take_training_step(self):
+        sample = self.buffer.sample_random_transitions(self.minibatch_size)
+        loss = self.dqn.train_network(sample)
+        self.losses.append(loss)
