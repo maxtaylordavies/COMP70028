@@ -85,9 +85,9 @@ class DQN:
     # The class initialisation function.
     def __init__(self):
         # Create a Q-network, which predicts the q-value for a particular state.
-        self.q_network = Network(input_dimension=2, output_dimension=4)
+        self.q_network = Network(input_dimension=2, output_dimension=3)
         # Create a target network, with same architecture as Q-network
-        self.target_network = Network(input_dimension=2, output_dimension=4)
+        self.target_network = Network(input_dimension=2, output_dimension=3)
         self.copy_weights()
         # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.01)
@@ -95,9 +95,13 @@ class DQN:
     def copy_weights(self):
         self.target_network.load_state_dict(self.q_network.state_dict())
 
-    def decrease_learning_rate(self, factor):
+    def decay_learning_rate(self):
         for param_group in self.optimiser.param_groups:
-            param_group["lr"] /= factor
+            param_group["lr"] *= 0.925
+
+    def finish_training(self):
+        for param_group in self.optimiser.param_groups:
+            param_group["lr"] = 0
 
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
     def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
@@ -160,6 +164,8 @@ class Agent:
 
     # Function to initialise the agent
     def __init__(self):
+        self.finished = False
+        self.greedy = False
         # Set the episode length
         self.episode_length = 1000
         self.previous_episode_last_step = 0
@@ -178,7 +184,7 @@ class Agent:
             [
                 [self.step_size, 0],  # right
                 [0, self.step_size],  # up
-                [-self.step_size, 0],  # left
+                # [-self.step_size, 0],  # left
                 [0, -self.step_size],  # down
             ],
             dtype=np.float32,
@@ -203,7 +209,11 @@ class Agent:
 
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
-        action = self.choose_epsilon_greedy_action(state)
+        action = (
+            self.get_greedy_action(state)
+            if self.greedy
+            else self.choose_epsilon_greedy_action(state)
+        )
         # Update the number of steps which the agent has taken
         self.num_steps_taken += 1
         # Store the state; this will be used later, when storing the transition
@@ -214,9 +224,13 @@ class Agent:
 
     # Function to set the next state and distance, which resulted from applying action self.action at state self.state
     def set_next_state_and_distance(self, next_state, distance_to_goal):
+        if self.greedy and self.episode_length == 100 and distance_to_goal < 0.03:
+            self.finished = True
+
         # Convert the distance to a reward
-        # reward = 0 if (self.state == next_state).all() else 1 - distance_to_goal
         reward = 1 - distance_to_goal
+        if (self.state == next_state).all():
+            reward /= 2  # discourage going into walls
         # Create and record a transition
         transition = (
             self.state,
@@ -228,7 +242,7 @@ class Agent:
         self.buffer.record_transition(transition)
 
         # If we have enough transitions stored, train the network
-        if self.buffer.length() >= self.minibatch_size:
+        if self.buffer.length() >= self.minibatch_size and not self.finished:
             self.take_training_step()
 
         if self.has_finished_episode():
@@ -239,10 +253,18 @@ class Agent:
             self.num_episodes += 1
             self.decay_epsilon()
             self.reduce_episode_length()
-            self.dqn.copy_weights()
-            print(self.episode_length, self.max_epsilon)
+            self.dqn.decay_learning_rate()
+
+            # Every 10 episodes, evaluate the greedy policy
+            if self.num_episodes > 0 and self.num_episodes % 10 == 0:
+                self.greedy = True
+            else:
+                self.greedy = False
 
         self.epsilon = min(self.max_epsilon, distance_to_goal)
+
+        if self.num_steps_taken % 100 == 0:
+            self.dqn.copy_weights()
 
     # Function to get the greedy action for a particular state
     def get_greedy_action(self, state):
@@ -254,11 +276,12 @@ class Agent:
     ############################################################################
 
     def decay_epsilon(self):
-        self.max_epsilon *= 0.92
+        self.max_epsilon *= 0.95
+        # self.max_epsilon = max(self.max_epsilon * 0.95, 0.01)
 
     def reduce_episode_length(self):
         self.previous_episode_last_step = self.num_steps_taken
-        self.episode_length = max(self.episode_length - 50, 100)
+        self.episode_length = max(int(self.episode_length * 0.95), 100)
 
     def get_last_action_idx(self):
         return (self.actions == self.action).all(axis=1).nonzero()[0][0]
