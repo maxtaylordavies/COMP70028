@@ -15,7 +15,6 @@
 ############################################################################
 ############################################################################
 
-import collections
 import torch
 import numpy as np
 from matplotlib import pyplot as plt
@@ -29,19 +28,48 @@ ax.set(
 )
 
 
+# class ReplayBuffer:
+#     def __init__(self):
+#         self.buffer = collections.deque(maxlen=5000)
+
+#     def record_transition(self, transition):
+#         self.buffer.append(transition)
+
+#     def sample_random_transitions(self, n):
+#         idxs = np.random.randint(len(self.buffer), size=n)
+#         return np.array([self.buffer[i] for i in idxs])
+
+#     def sample_prioritized_transitions(self, n):
+#         pass
+#         # weight inversely by reward - so prioritise samples with lower rewards
+
+#     def length(self):
+#         return len(self.buffer)
+
+
 class ReplayBuffer:
-    def __init__(self):
-        self.buffer = collections.deque(maxlen=5000)
+    def __init__(self, max_size):
+        self.buffer = [None] * max_size
+        self.max_size = max_size
+        self.index = 0
+        self.size = 0
 
     def record_transition(self, transition):
-        self.buffer.append(transition)
+        self.buffer[self.index] = transition
+        self.size = min(self.size + 1, self.max_size)
+        self.index = (self.index + 1) % self.max_size
 
     def sample_random_transitions(self, n):
-        idxs = np.random.randint(len(self.buffer), size=n)
-        return np.array([self.buffer[i] for i in idxs])
+        idxs = np.random.choice(np.arange(self.size), size=n)
+        return [self.buffer[idx] for idx in idxs]
+
+    def sample_prioritized_transitions(self, n):
+        distribution = [1 - t[2] for t in self.buffer[: self.size]]
+        idxs = np.random.choice(np.arange(self.size), size=n, p=distribution)
+        return [self.buffer[idx] for idx in idxs]
 
     def length(self):
-        return len(self.buffer)
+        return self.size
 
 
 # The Network class inherits the torch.nn.Module class, which represents a neural network.
@@ -168,13 +196,14 @@ class Agent:
             dtype=np.float32,
         )
         # Exploration
-        self.epsilon = 0.5
+        self.max_epsilon = 0.9
+        self.epsilon = 0.9
         # Minibatch size
         self.minibatch_size = 100
         # Losses
         self.average_losses = [0]
         # Initialise an experience replay buffer
-        self.buffer = ReplayBuffer()
+        self.buffer = ReplayBuffer(5000)
         # Initialise a DQN
         self.dqn = DQN()
 
@@ -187,7 +216,7 @@ class Agent:
 
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
-        action = self.choose_epsilon_greedy_action()
+        action = self.choose_epsilon_greedy_action(state)
         # Update the number of steps which the agent has taken
         self.num_steps_taken += 1
         # Store the state; this will be used later, when storing the transition
@@ -199,18 +228,31 @@ class Agent:
     # Function to set the next state and distance, which resulted from applying action self.action at state self.state
     def set_next_state_and_distance(self, next_state, distance_to_goal):
         # Convert the distance to a reward
+        # reward = 0 if (self.state == next_state).all() else 1 - distance_to_goal
         reward = 1 - distance_to_goal
         # Create and record a transition
         transition = (
             self.state,
             self.get_last_action_idx(),
             reward,
+            # 0 if (next_state == self.state).all() else reward,
             next_state,
         )
         self.buffer.record_transition(transition)
+
         # If we have enough transitions stored, train the network
         if self.buffer.length() >= self.minibatch_size:
             self.take_training_step()
+
+        if self.has_finished_episode():
+            ax.plot(self.average_losses, color="red")
+            plt.yscale("log")
+            plt.show()
+            self.average_losses.append(0)
+            self.num_episodes += 1
+            self.decay_epsilon()
+
+        self.epsilon = min(self.max_epsilon, distance_to_goal)
 
     # Function to get the greedy action for a particular state
     def get_greedy_action(self, state):
@@ -221,8 +263,9 @@ class Agent:
     #                             NEW FUNCTIONS                                #
     ############################################################################
 
-    def decrease_epsilon(self, factor):
-        self.epsilon /= factor
+    def decay_epsilon(self):
+        self.max_epsilon *= 0.9
+        print(self.max_epsilon)
 
     def get_last_action_idx(self):
         return (self.actions == self.action).all(axis=1).nonzero()[0][0]
@@ -231,10 +274,10 @@ class Agent:
         idx = np.random.randint(len(self.actions))
         return self.actions[idx]
 
-    def choose_epsilon_greedy_action(self):
+    def choose_epsilon_greedy_action(self, state):
         if np.random.random() <= self.epsilon or self.state is None:
             return self.choose_random_action()
-        q_values = self.dqn.get_q_values_for_state(self.state)
+        q_values = self.dqn.get_q_values_for_state(state)
         return self.actions[np.argmax(q_values)]
 
     def take_training_step(self):
@@ -244,14 +287,3 @@ class Agent:
         self.average_losses[-1] += (
             loss - self.average_losses[-1]
         ) / self.num_steps_taken
-
-        if self.has_finished_episode():
-            ax.plot(self.average_losses, color="blue")
-            plt.yscale("log")
-            plt.show()
-            self.average_losses.append(0)
-            self.num_episodes += 1
-            if self.num_episodes % 5 == 0:
-                self.episode_length = max(int(self.episode_length / 1.5), 100)
-                self.decrease_epsilon(1.5)
-                print(self.epsilon, self.episode_length)
