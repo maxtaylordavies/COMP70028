@@ -70,9 +70,9 @@ class DQN:
     # The class initialisation function.
     def __init__(self):
         # Create a Q-network, which predicts the q-value for a particular state.
-        self.q_network = Network(input_dimension=2, output_dimension=3)
+        self.q_network = Network(input_dimension=2, output_dimension=4)
         # Create a target network, with same architecture as Q-network
-        self.target_network = Network(input_dimension=2, output_dimension=3)
+        self.target_network = Network(input_dimension=2, output_dimension=4)
         self.copy_weights()
         # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.01)
@@ -147,6 +147,8 @@ class Agent:
     def __init__(self):
         # Set the episode length
         self.episode_length = 1000
+        # Reset total number of episodes agent has experienced
+        self.num_episodes = 0
         # Reset the total number of steps which the agent has taken
         self.num_steps_taken = 0
         # The state variable stores the latest state of the agent in the environment
@@ -160,12 +162,13 @@ class Agent:
             [
                 [self.step_size, 0],  # right
                 [0, self.step_size],  # up
+                [-self.step_size, 0],  # left
                 [0, -self.step_size],  # down
             ],
             dtype=np.float32,
         )
         # Exploration
-        self.epsilon = 0.3
+        self.epsilon = 0.5
         # Minibatch size
         self.minibatch_size = 100
         # Losses
@@ -184,7 +187,6 @@ class Agent:
 
     # Function to get the next action, using whatever method you like
     def get_next_action(self, state):
-        # Here, the action is random, but you can change this
         action = self.choose_epsilon_greedy_action()
         # Update the number of steps which the agent has taken
         self.num_steps_taken += 1
@@ -219,6 +221,9 @@ class Agent:
     #                             NEW FUNCTIONS                                #
     ############################################################################
 
+    def decrease_epsilon(self, factor):
+        self.epsilon /= factor
+
     def get_last_action_idx(self):
         return (self.actions == self.action).all(axis=1).nonzero()[0][0]
 
@@ -245,3 +250,8 @@ class Agent:
             plt.yscale("log")
             plt.show()
             self.average_losses.append(0)
+            self.num_episodes += 1
+            if self.num_episodes % 5 == 0:
+                self.episode_length = max(int(self.episode_length / 1.5), 100)
+                self.decrease_epsilon(1.5)
+                print(self.epsilon, self.episode_length)
