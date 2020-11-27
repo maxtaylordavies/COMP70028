@@ -15,13 +15,28 @@
 ############################################################################
 ############################################################################
 
+import collections
 import torch
 import numpy as np
 
 
+class ReplayBuffer:
+    def __init__(self):
+        self.buffer = collections.deque(maxlen=5000)
+
+    def record_transition(self, transition):
+        self.buffer.append(transition)
+
+    def sample_random_transitions(self, n):
+        idxs = np.random.randint(len(self.buffer), size=n)
+        return np.array([self.buffer[i] for i in idxs])
+
+    def length(self):
+        return len(self.buffer)
+
+
 # The Network class inherits the torch.nn.Module class, which represents a neural network.
 class Network(torch.nn.Module):
-
     # The class initialisation function. This takes as arguments the dimension of the network's input (i.e. the dimension of the state), and the dimension of the network's output (i.e. the dimension of the action).
     def __init__(self, input_dimension, output_dimension):
         # Call the initialisation function of the parent class.
@@ -42,7 +57,6 @@ class Network(torch.nn.Module):
 
 
 class Agent:
-
     # Function to initialise the agent
     def __init__(self):
         # Set the episode length
