@@ -85,9 +85,9 @@ class DQN:
     # The class initialisation function.
     def __init__(self):
         # Create a Q-network, which predicts the q-value for a particular state.
-        self.q_network = Network(input_dimension=2, output_dimension=3)
+        self.q_network = Network(input_dimension=2, output_dimension=4)
         # Create a target network, with same architecture as Q-network
-        self.target_network = Network(input_dimension=2, output_dimension=3)
+        self.target_network = Network(input_dimension=2, output_dimension=4)
         self.copy_weights()
         # Define the optimiser which is used when updating the Q-network. The learning rate determines how big each gradient step is during backpropagation.
         self.optimiser = torch.optim.Adam(self.q_network.parameters(), lr=0.01)
@@ -98,10 +98,6 @@ class DQN:
     def decay_learning_rate(self):
         for param_group in self.optimiser.param_groups:
             param_group["lr"] *= 0.925
-
-    def finish_training(self):
-        for param_group in self.optimiser.param_groups:
-            param_group["lr"] = 0
 
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
     def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
@@ -184,7 +180,7 @@ class Agent:
             [
                 [self.step_size, 0],  # right
                 [0, self.step_size],  # up
-                # [-self.step_size, 0],  # left
+                [-self.step_size, 0],  # left
                 [0, -self.step_size],  # down
             ],
             dtype=np.float32,
@@ -229,7 +225,7 @@ class Agent:
 
         # Convert the distance to a reward
         reward = 1 - distance_to_goal
-        if (self.state == next_state).all():
+        if (self.state == next_state).all() and distance_to_goal > 0.25:
             reward /= 2  # discourage going into walls
         # Create and record a transition
         transition = (

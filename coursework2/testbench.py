@@ -5,7 +5,7 @@ from random_environment import Environment
 from agent import Agent
 
 
-def test_agent():
+def test_agent(logfile):
     display_on = True
 
     # Create a random seed, which will define the environment
@@ -62,14 +62,18 @@ def test_agent():
     )
     print(f"Result for maze {random_seed}: {resultstr}")
 
+    with open(logfile, "a") as f:
+        f.write(f"Result for maze {random_seed}: {resultstr}\n")
+
     return has_reached_goal
 
 
 # Main entry point
 if __name__ == "__main__":
+
     score = 0
     num_tests = 20
     for i in range(num_tests):
-        if test_agent():
+        if test_agent("results.txt"):
             score += 1
     print(f"achieved score of {score * (100 / num_tests)}%")

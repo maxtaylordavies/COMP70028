@@ -1,0 +1,5 @@
+Result for maze 1606520138: Reached goal in 53 steps.
+Result for maze 1606520738: Reached goal in 59 steps.
+Result for maze 1606521338: Did not reach goal. Final distance = 0.12481534481048584
+Result for maze 1606521938: Did not reach goal. Final distance = 0.6892421841621399
+Result for maze 1606522538: Reached goal in 61 steps.
