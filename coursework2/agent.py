@@ -19,14 +19,6 @@ import torch
 import numpy as np
 from matplotlib import pyplot as plt
 
-plt.ion()
-fig, ax = plt.subplots()
-ax.set(
-    xlabel="Episodes",
-    ylabel="Average Loss",
-    title="Loss Curve",
-)
-
 
 class ReplayBuffer:
     def __init__(self, max_size):
@@ -97,7 +89,7 @@ class DQN:
 
     def decay_learning_rate(self):
         for param_group in self.optimiser.param_groups:
-            param_group["lr"] *= 0.925
+            param_group["lr"] *= 0.95
 
     # Function that is called whenever we want to train the Q-network. Each call to this function takes in a transition tuple containing the data we use to update the Q-network.
     def train_network(self, transitions, discount_factor=0.9, use_target_network=False):
@@ -197,6 +189,14 @@ class Agent:
         # Initialise a DQN
         self.dqn = DQN()
 
+        plt.ion()
+        self.fig, self.ax = plt.subplots()
+        self.ax.set(
+            xlabel="Episodes",
+            ylabel="Average Loss",
+            title="Loss Curve",
+        )
+
     # Function to check whether the agent has reached the end of an episode
     def has_finished_episode(self):
         return (
@@ -220,8 +220,10 @@ class Agent:
 
     # Function to set the next state and distance, which resulted from applying action self.action at state self.state
     def set_next_state_and_distance(self, next_state, distance_to_goal):
-        if self.greedy and self.episode_length == 100 and distance_to_goal < 0.03:
-            self.finished = True
+        if self.greedy and self.episode_length == 100:
+            self.max_epsilon = distance_to_goal / 2
+            if distance_to_goal < 0.03:
+                self.finished = True
 
         # Convert the distance to a reward
         reward = 1 - distance_to_goal
@@ -242,7 +244,7 @@ class Agent:
             self.take_training_step()
 
         if self.has_finished_episode():
-            ax.plot(self.average_losses, color="red")
+            self.ax.plot(self.average_losses, color="red")
             plt.yscale("log")
             plt.show()
             self.average_losses.append(0)
@@ -251,8 +253,8 @@ class Agent:
             self.reduce_episode_length()
             self.dqn.decay_learning_rate()
 
-            # Every 10 episodes, evaluate the greedy policy
-            if self.num_episodes > 0 and self.num_episodes % 10 == 0:
+            # Every 5 episodes, evaluate the greedy policy
+            if self.num_episodes > 0 and self.num_episodes % 5 == 0:
                 self.greedy = True
             else:
                 self.greedy = False
